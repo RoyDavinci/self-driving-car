@@ -1,5 +1,5 @@
 class Car {
-	constructor(x, y, width, height) {
+	constructor(x, y, width, height, controlType, maxSpeed = 3) {
 		this.x = x;
 		this.y = y;
 		this.width = width;
@@ -7,23 +7,86 @@ class Car {
 		this.speed = 0;
 		this.angle = 0;
 		this.acceleration = 0.2;
-		this.maxSpeed = 3;
+		this.maxSpeed = maxSpeed;
 		this.friction = 0.05;
-		this.controls = new Controls();
+		this.polygon = [];
+		this.damaged = false;
+		if (controlType != "DUMMY") {
+			this.sensor = new Sensor(this);
+		}
+
+		this.controls = new Controls(controlType);
+	}
+	update(roadBorders, traffic) {
+		if (!this.damaged) {
+			this.#move();
+			this.polygon = this.#createPolygon();
+			this.damaged = this.#accessDamaged(roadBorders, traffic);
+		}
+
+		if (this.sensor) {
+			this.sensor.update(roadBorders, traffic);
+		}
+	}
+	#accessDamaged(roadBorders, traffic) {
+		for (let i = 0; i < roadBorders.length; i++) {
+			if (polyIntersect(this.polygon, roadBorders[i])) {
+				return true;
+			}
+		}
+		for (let i = 0; i < traffic.length; i++) {
+			if (polyIntersect(this.polygon, traffic[i].polygon)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	#createPolygon() {
+		const points = [];
+		const radius = Math.hypot(this.width, this.height) / 2;
+		const alpha = Math.atan2(this.width, this.height);
+		points.push({
+			x: this.x - Math.sin(this.angle - alpha) * radius,
+			y: this.y - Math.cos(this.angle - alpha) * radius,
+		});
+		points.push({
+			x: this.x - Math.sin(this.angle + alpha) * radius,
+			y: this.y - Math.cos(this.angle + alpha) * radius,
+		});
+		points.push({
+			x: this.x - Math.sin(Math.PI + this.angle - alpha) * radius,
+			y: this.y - Math.cos(Math.PI + this.angle - alpha) * radius,
+		});
+		points.push({
+			x: this.x - Math.sin(Math.PI + this.angle + alpha) * radius,
+			y: this.y - Math.cos(Math.PI + this.angle + alpha) * radius,
+		});
+		return points;
+	}
+	draw(context, color) {
+		// context.save();
+		// context.translate(this.x, this.y);
+		// context.rotate(-this.angle);
+		if (this.damaged) {
+			context.fillStyle = "gray";
+		} else {
+			context.fillStyle = color;
+		}
+		context.beginPath();
+		if (this.polygon.length > 0) {
+			context.moveTo(this.polygon[0].x, this.polygon[0].y);
+			for (let i = 0; i < this.polygon.length; i++) {
+				context.lineTo(this.polygon[i].x, this.polygon[i].y);
+			}
+		}
+		// context.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+		context.fill();
+		// context.restore();
+		if (this.sensor) {
+			this.sensor.draw(ctx);
+		}
 	}
 
-	draw(context) {
-		context.save();
-		context.translate(this.x, this.y);
-		context.rotate(-this.angle);
-		context.beginPath();
-		context.rect(-this.width / 2, -this.height / 2, this.width, this.height);
-		context.fill();
-		context.restore();
-	}
-	update() {
-		this.#move();
-	}
 	#move() {
 		if (this.controls.forward) {
 			this.speed += this.acceleration;
